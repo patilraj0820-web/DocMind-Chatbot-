@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />b
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DocuMind — RAG Chatbot</title>
+    <meta name="description"
+        content="Upload any PDF, TXT, or DOCX and ask questions instantly. Powered by local Ollama models via Retrieval-Augmented Generation." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="./templates/style.css" />
+</head>
+
+<body>
+
+    <!-- ════════════════════════════ SIDEBAR ════════════════════════════ -->
+    <aside class="sidebar" id="sidebar">
+
+        <div class="sidebar-brand">
+            <span class="brand-icon">🧠</span>
+            <span class="brand-text">DocuMind</span>
+        </div>
+
+        <!-- Document Upload Panel -->
+        <div class="upload-panel">
+            <p class="panel-label">DOCUMENT</p>
+
+            <!-- Drop zone -->
+            <div class="drop-zone" id="dropZone" ondrop="handleDrop(event)" ondragover="event.preventDefault()"
+                ondragenter="dropZone.classList.add('drag-over')" ondragleave="dropZone.classList.remove('drag-over')"
+                onclick="document.getElementById('fileInput').click()">
+                <div class="drop-icon">📁</div>
+                <p class="drop-hint">Drop file here<br /><span>or click to browse</span></p>
+                <p class="drop-types">PDF · TXT · DOCX · MD · CSV · XLSX · JSON · XML</p>
+            </div>
+
+            <input type="file" id="fileInput"
+                accept=".pdf,.txt,.md,.docx,.doc,.xlsx,.xls,.csv,.json,.xml"
+                hidden onchange="handleFileSelect(event)" />
+
+            <!-- Upload progress -->
+            <div class="upload-status" id="uploadStatus" style="display:none;">
+                <div class="upload-progress-bar" id="uploadProgressBar"></div>
+                <span class="upload-status-text" id="uploadStatusText">Processing…</span>
+            </div>
+
+            <!-- Loaded document badge -->
+            <div class="doc-badge" id="docBadge" style="display:none;">
+                <span class="doc-badge-icon">✅</span>
+                <span class="doc-badge-name" id="docBadgeName"></span>
+                <button class="doc-clear-btn" id="docClearBtn" onclick="clearDocument()"
+                    title="Clear document">✕</button>
+            </div>
+        </div>
+
+        <!-- Model Selector -->
+        <div class="sidebar-section">
+            <p class="panel-label">MODEL</p>
+            <select id="chatModel" class="model-select">
+                <option value="qwen2.5:3b">qwen2.5:3b</option>
+                <option value="llama3.2:latest">llama3.2:latest</option>
+                <option value="llama3:latest">llama3:latest</option>
+                <option value="mistral:latest">mistral:latest</option>
+                <option value="phi3:mini">phi3:mini</option>
+            </select>
+        </div>
+
+        <!-- Stats -->
+        <div class="sidebar-section" id="statsSection" style="display:none;">
+            <p class="panel-label">DOCUMENT INFO</p>
+            <div class="stat-row">
+                <span class="stat-key">Chunks</span>
+                <span class="stat-val" id="statChunks">—</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-key">Messages</span>
+                <span class="stat-val" id="statMessages">0</span>
+            </div>
+        </div>
+
+        <div class="sidebar-footer">
+            <span>Powered by Ollama · FAISS · SentenceTransformers</span>
+        </div>
+    </aside>
+
+    <!-- ════════════════════════════ MAIN ════════════════════════════ -->
+    <main class="main-area">
+
+        <!-- Top bar -->
+        <header class="topbar">
+            <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()"
+                aria-label="Toggle sidebar">☰</button>
+            <div class="topbar-center">
+                <h1 class="topbar-title">DocuMind RAG Chatbot</h1>
+                <span class="topbar-sub">Retrieval-Augmented Generation · Local LLM</span>
+            </div>
+            <button class="clear-chat-btn" id="clearChatBtn" onclick="clearChat()">🗑 Clear Chat</button>
+        </header>
+
+        <!-- Chat window -->
+        <section class="chat-area" id="chatArea">
+
+            <!-- Welcome state -->
+            <div class="welcome-state" id="welcomeState">
+                <div class="welcome-glow"></div>
+                <div class="welcome-icon">🧠</div>
+                <h2 class="welcome-title">Welcome to DocuMind</h2>
+                <p class="welcome-desc">
+                    Upload a document from the sidebar, then ask any question about its contents.<br />
+                    The AI will retrieve the most relevant passages and generate a precise answer.
+                </p>
+                <div class="welcome-steps">
+                    <div class="step">
+                        <span class="step-num">1</span>
+                        <span>Upload a PDF, TXT, or DOCX</span>
+                    </div>
+                    <div class="step">
+                        <span class="step-num">2</span>
+                        <span>Wait for indexing to finish</span>
+                    </div>
+                    <div class="step">
+                        <span class="step-num">3</span>
+                        <span>Ask any question about the document</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Messages go here -->
+            <div class="messages" id="messages"></div>
+
+        </section>
+
+        <!-- Typing indicator -->
+        <div class="typing-bar" id="typingBar" style="display:none;">
+            <div class="typing-dots">
+                <span></span><span></span><span></span>
+            </div>
+            <span class="typing-label">AI is thinking…</span>
+        </div>
+
+        <!-- Input bar -->
+        <footer class="input-bar">
+            <textarea id="chatInput" class="chat-textarea" placeholder="Ask a question about your document…" rows="1"
+                onkeydown="handleInputKey(event)" oninput="autoResize(this)"></textarea>
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()" aria-label="Send message">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+            </button>
+        </footer>
+
+    </main>
+
+    <!-- Toast notification -->
+    <div class="toast" id="toast"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="templates/app.js"></script>
+
+</body>
+
+</html>
